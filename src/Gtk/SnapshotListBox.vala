@@ -269,7 +269,8 @@ class SnapshotListBox : Gtk.Box{
 
 						string txt = "";
 
-						if (App.btrfs_mode){
+                        // TODO: Maybe break this out so we can call ZFS subvolumes by their proper name of datasets
+						if (App.btrfs_mode || App.zfs_mode){
 
 							txt += "<b>%s: %d</b>\n".printf(_("Subvolumes"), bak.subvolumes.values.size);
 							
@@ -439,6 +440,22 @@ class SnapshotListBox : Gtk.Box{
 			
 			ctxt.text = format_file_size(size);
 		}
+		else if (bak.zfs_mode){
+
+         			int64 size = 0;
+         			// TODO: Use mountpoint or rootfs property
+         			if (bak.subvolumes.has_key("/")){
+         				size += bak.subvolumes["/"].total_bytes;
+         			}
+
+         			if (bak.subvolumes.has_key("/home")){
+         				size += bak.subvolumes["/home"].total_bytes;
+         			}
+
+         			ctxt.text = format_file_size(size);
+         		}
+
+
 		else{
 			ctxt.text = "";
 		}
@@ -474,6 +491,19 @@ class SnapshotListBox : Gtk.Box{
 			
 			ctxt.text = format_file_size(size);
 		}
+		else if (bak.btrfs_mode){
+
+            int64 size = 0;
+            // TODO: Use mountpoints or rootfs property
+            if (bak.subvolumes.has_key("/")){
+                size += bak.subvolumes["/"].unshared_bytes;
+            }
+            if (bak.subvolumes.has_key("/home")){
+                size += bak.subvolumes["/home"].unshared_bytes;
+            }
+
+            ctxt.text = format_file_size(size);
+        }
 		else{
 			ctxt.text = "";
 		}
@@ -537,10 +567,10 @@ class SnapshotListBox : Gtk.Box{
 		
 		mi_remove.sensitive = (selected.size > 0);
 		mi_mark.sensitive = (selected.size > 0);
-		mi_view_log_create.sensitive = !App.btrfs_mode;
-		mi_view_log_restore.sensitive = !App.btrfs_mode;
+		mi_view_log_create.sensitive = (!App.btrfs_mode && !App.zfs_mode);
+		mi_view_log_restore.sensitive = (!App.btrfs_mode && !App.zfs_mode);
 
-		if (!App.btrfs_mode){
+		if (!App.btrfs_mode && !App.zfs_mode){
 
 			if (selected.size > 0){
 				

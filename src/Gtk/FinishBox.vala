@@ -81,7 +81,7 @@ class FinishBox : Gtk.Box{
 
 		msg += bullet + _("System can be rolled-back to a previous date by restoring a snapshot.") + "\n\n";
 
-		if (App.btrfs_mode){
+		if (App.btrfs_mode || App.zfs_mode){
 			msg += bullet + _("Restoring a snapshot will replace system subvolumes, and system subvolumes currently in use will be preserved as a new snapshot. If required, this snapshot can be restored later to 'undo' the restore.") + "\n\n";
 		}
 		else{
@@ -91,6 +91,9 @@ class FinishBox : Gtk.Box{
 		if (App.btrfs_mode){
 			msg += bullet + _("BTRFS snapshots are saved on the same disk from which it is created. If the system disk fails, snapshots will be lost along with the system. Save snapshots to an external non-system disk in RSYNC mode to guard against disk failures.") + "\n\n";
 		}
+		else if (App.zfs_mode){
+			msg += bullet + _("ZFS snapshots are saved on the same disk from which they are created. If the system disk fails, snapshots will be lost along with the system. Use ZFS mirrors, or save snapshots to an external non-system disk in RSYNC mode to guard against disk failures.") + "\n\n";
+        }
 		else{
 			msg += bullet + _("Save snapshots to an external disk instead of the system disk to guard against drive failures.") + "\n\n";
 

@@ -234,9 +234,16 @@ public class AppConsole : GLib.Object {
 					App.cmd_btrfs_mode = true;
 					break;
 
+				case "--zfs":
+					App.zfs_mode = true;
+					App.cmd_zfs_mode = true;
+					break;
+
 				case "--rsync":
 					App.btrfs_mode = false;
 					App.cmd_btrfs_mode = false;
+					App.zfs_mode = false;
+					App.cmd_zfs_mode = false;
 					break;
 
 				case "--backup":
@@ -629,7 +636,7 @@ public class AppConsole : GLib.Object {
 
 		init_mounts();
 		
-		if (!App.btrfs_mode){
+		if (!App.btrfs_mode && !App.zfs_mode){
 
 			map_devices();
 
@@ -697,7 +704,7 @@ public class AppConsole : GLib.Object {
 
 				dev = read_stdin_device(list, "");
 
-				if (App.btrfs_mode && !App.check_device_for_backup(dev, true)){
+				if ((App.btrfs_mode || App.zfs_mode) && !App.check_device_for_backup(dev, true)){
 					log_error(_("Selected snapshot device is not a system disk"));
 					log_error(_("Select BTRFS system disk with root subvolume (@)"));
 					dev = null;
@@ -712,7 +719,7 @@ public class AppConsole : GLib.Object {
 				App.exit_app(1);
 			}
 
-			App.repo = new SnapshotRepo.from_device(dev, null, App.btrfs_mode);
+			App.repo = new SnapshotRepo.from_device(dev, null, App.btrfs_mode, App.zfs_mode);
 			if (!App.repo.available()){
 				App.exit_app(1);
 			}

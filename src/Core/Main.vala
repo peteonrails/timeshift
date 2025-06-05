@@ -53,6 +53,10 @@ public class Main : GLib.Object{
 	public bool include_btrfs_home_for_backup = false;
 	public bool include_btrfs_home_for_restore = false;
 	
+	public bool zfs_mode = false;
+	public bool include_zfs_home_for_backup = false;
+	public bool include_zfs_home_for_restore = false;
+
 	public bool stop_cron_emails = true;
 	
 	public Gee.ArrayList<Device> partitions;
@@ -154,7 +158,8 @@ public class Main : GLib.Object{
 	public string cmd_comments = "";
 	public string cmd_tags = "";
 	public bool? cmd_btrfs_mode = null;
-	
+	public bool? cmd_zfs_mode = null;
+
 	public string progress_text = "";
 
 	public Gtk.Window? parent_window = null;
@@ -409,6 +414,35 @@ public class Main : GLib.Object{
 		return supported;
 	}
 
+	public bool check_zfs_layout_system(Gtk.Window? win = null){
+
+		log_debug("check_zfs_layout_system()");
+
+        // TODO Look for mountpoint=/
+		bool supported = sys_subvolumes.has_key("/");
+		if (include_btrfs_home_for_backup){
+		    // TODO look for mountpoint=home
+			supported =  supported && sys_subvolumes.has_key("/home");
+		}
+
+		if (!supported){
+			string msg = _("The system partition has an unsupported subvolume layout.") + " ";
+			msg += _("Only ubuntu-type layouts with / and /home datasets are currently supported.") + "\n\n";
+			msg += _("Application will exit.") + "\n\n";
+			string title = _("Not Supported");
+
+			if (app_mode == ""){
+				gtk_set_busy(false, win);
+				gtk_messagebox(title, msg, win, true);
+			}
+			else{
+				log_error(msg);
+			}
+		}
+
+		return supported;
+	}
+
 	public bool check_btrfs_layout(Device? dev_root, Device? dev_home, bool unlock){
 		
 		bool supported = true; // keep true for non-btrfs systems
@@ -452,11 +486,20 @@ public class Main : GLib.Object{
 				case "--btrfs":
 					btrfs_mode = true;
 					cmd_btrfs_mode = btrfs_mode;
+					zfs_mode = false;
+					cmd_zfs_mode = false;
+					break;
+
+				case "--zfs":
+					zfs_mode = true;
+					cmd_zfs_mode = true;
 					break;
 
 				case "--rsync":
 					btrfs_mode = false;
 					cmd_btrfs_mode = btrfs_mode;
+					zfs_mode = false;
+					cmd_zfs_mode = false;
 					break;
 					
 				case "--check":
@@ -1287,8 +1330,11 @@ public class Main : GLib.Object{
 		if (btrfs_mode)
 		{
 			new_snapshot = create_snapshot_with_btrfs(tag, dt_created);
-		}
-		else
+		} else
+		if (zfs_mode)
+		{
+		    new_snapshot = create_snapshot_with_zfs(tag, dt_created);
+		} else
 		if (first_snapshot_size > 0 && repo.device.free_bytes < first_snapshot_size)
 		{
 			// Perform a dry-run of the intended backup and make sure we'll have enough room
@@ -1327,7 +1373,19 @@ public class Main : GLib.Object{
 		
 		var message = "";
 		if (new_snapshot != null){
-			message = "%s %s (%lds)".printf((btrfs_mode ? "BTRFS" : "RSYNC"), _("Snapshot saved successfully"), seconds);
+		    string snapshot_type = null;
+		    if (btrfs_mode) {
+		        snapshot_type = "BTRFS";
+		    } else
+		    if (zfs_mode)
+		    {
+		        snapshot_type = "ZFS";
+		    } else
+		    {
+		        snapshot_type = "RSYNC";
+		    }
+
+			message = "%s %s (%lds)".printf(snapshot_type, _("Snapshot saved successfully"), seconds);
 		}
 		else{
 			message = _("Failed to create snapshot");
@@ -1586,7 +1644,7 @@ public class Main : GLib.Object{
 		// this step is redundant - just in case if app crashes while parsing log file in next step
 		//Snapshot.write_control_file(
 		//	snapshot_path, dt_created, sys_uuid, current_distro.full_name(),
-		//	initial_tags, cmd_comments, 0, false, false, repo);
+		//	initial_tags, cmd_comments, 0, false, false, false, repo);
 
 		// parse log file
 		//progress_text = _("Parsing log file...");
@@ -1599,7 +1657,7 @@ public class Main : GLib.Object{
 		// write control file (final - with file count after parsing log)
 		var snapshot = Snapshot.write_control_file(
 			snapshot_path, dt_created, sys_uuid, current_distro.full_name(),
-			initial_tags, cmd_comments, fcount, false, false, repo);
+			initial_tags, cmd_comments, fcount, false, false, false, repo);
 
 		set_tags(snapshot); // set_tags() will update the control file
 
@@ -1683,7 +1741,7 @@ public class Main : GLib.Object{
 		// write control file
 		var snapshot = Snapshot.write_control_file(
 			snapshot_path, dt_created, sys_uuid, current_distro.full_name(),
-			initial_tags, cmd_comments, 0, true, false, repo);
+			initial_tags, cmd_comments, 0, true, false, false, repo);
 
 		// write subvolume info
 		foreach(var subvol in sys_subvolumes.values){
@@ -1695,6 +1753,76 @@ public class Main : GLib.Object{
 		
 		return snapshot;
 	}
+
+        // TODO: make this work
+		private Snapshot? create_snapshot_with_zfs(string tag, DateTime dt_created){
+
+    		log_msg(_("Creating new backup...") + "(ZFS)");
+
+    		log_msg(_("Saving to device") + ": %s".printf(repo.device.device) + ", " + _("mounted at path") + ": %s".printf(repo.mount_paths["/"]));
+    		if ((repo.device_home != null) && (repo.device_home.uuid != repo.device.uuid)){
+    			log_msg(_("Saving to device") + ": %s".printf(repo.device_home.device) + ", " + _("mounted at path") + ": %s".printf(repo.mount_paths["/home"]));
+    		}
+
+    		// take new backup ---------------------------------
+
+    		if (repo.mount_path.length == 0){
+    			log_error("Snapshot device not mounted");
+    			exit_app();
+    		}
+
+    		string time_stamp = dt_created.format("%Y-%m-%d_%H-%M-%S");
+    		string snapshot_name = time_stamp;
+    		string sys_uuid = (sys_root == null) ? "" : sys_root.uuid;
+            string snapshot_path = "";
+    		// create subvolume snapshots
+
+            // TODO: Use mountpoints to find this volume and the home volume below
+    		var subvol_names = new string[] { "rpool/manjaro/root" };
+
+    		if (include_zfs_home_for_backup){
+    			subvol_names = new string[] { "rpool/manjaro/root","zdata/home" };
+    		}
+
+    		foreach(var subvol_name in subvol_names){
+    			string cmd = "zfs snapshot '%s'@'%s' \n".printf(subvol_name, snapshot_name);
+
+    			if (LOG_COMMANDS) { log_debug(cmd); }
+
+    			string std_out, std_err;
+
+    			int ret_val = exec_sync(cmd, out std_out, out std_err);
+
+    			if (ret_val != 0){
+
+    				log_error (std_err);
+    				log_error(_("zfs returned an error") + ": %d".printf(ret_val));
+    				log_error(_("Failed to create subvolume snapshot") + ": %s".printf(subvol_name));
+    				return null;
+    			}
+    			else{
+    				log_msg(_("Created subvolume snapshot") + ": %s".printf(snapshot_name));
+    			}
+    		}
+
+    		//log_msg(_("Writing control file..."));
+    		string initial_tags = (tag == "ondemand") ? "" : tag;
+
+    		// write control file
+    		var snapshot = Snapshot.write_control_file(
+    			snapshot_path, dt_created, sys_uuid, current_distro.full_name(),
+    			initial_tags, cmd_comments, 0, false, true, false, repo);
+
+    		// write subvolume info
+    		foreach(var subvol in sys_subvolumes.values){
+    			snapshot.subvolumes.set(subvol.name, subvol);
+    		}
+    		snapshot.update_control_file(); // save subvolume info
+
+    		set_tags(snapshot); // set_tags() will update the control file
+
+    		return snapshot;
+    	}
 
 	private void set_tags(Snapshot snapshot){
 
@@ -1789,7 +1917,7 @@ public class Main : GLib.Object{
 			var bak = delete_list[0];
 			bak.mark_for_deletion(); // mark for deletion again since initial list may have changed
 
-			if (btrfs_mode){
+			if (btrfs_mode || zfs_mode){
 				status = bak.remove(true); // wait till complete
 
 				var message = "%s '%s'".printf(_("Removed"), bak.name);
@@ -2224,6 +2352,16 @@ public class Main : GLib.Object{
 				return false;
 			}
 		}
+		else if (zfs_mode){
+            if (repo.mount_paths["/"].length == 0){
+                log_error(_("ZFS device is not mounted") + ": /");
+                return false;
+            }
+            if (include_zfs_home_for_restore && (repo.mount_paths["/home"].length == 0)){
+                log_error(_("ZFS device is not mounted") + ": /home");
+                return false;
+            }
+        }
 		else{
 			if (dst_root == null){
 				log_error(_("Target device not specified!"));
@@ -2245,6 +2383,9 @@ public class Main : GLib.Object{
 			if (btrfs_mode){
 				new Thread<bool>.try ("restore-execute-btrfs", () => {restore_execute_btrfs(); return true;});
 			}
+            else if (zfs_mode){
+                new Thread<bool>.try ("restore-execute-zfs", () => {restore_execute_zfs(); return true;});
+            }
 			else{
 				new Thread<bool>.try ("restore-execute-rsync", () => {restore_execute_rsync(); return true;});
 			}
@@ -2302,6 +2443,10 @@ public class Main : GLib.Object{
 				if (!App.snapshot_to_restore.subvolumes.has_key(entry.subvolume_name())){ continue; }
 
 				if ((entry.subvolume_name() == "@home") && !include_btrfs_home_for_restore){ continue; }
+			} else if (zfs_mode) {
+                if (entry.subvolume_name().length == 0){ continue; }
+                if (!App.snapshot_to_restore.subvolumes.has_key(entry.subvolume_name())){ continue; }
+                if ((entry.subvolume_name() == "/home") && !include_zfs_home_for_restore){ continue; }
 			}
 			
 			string dev_name = entry.device.full_name_with_parent;
@@ -2338,8 +2483,12 @@ public class Main : GLib.Object{
 				if (!App.snapshot_to_restore.subvolumes.has_key(entry.subvolume_name())){ continue; }
 
 				if ((entry.subvolume_name() == "@home") && !include_btrfs_home_for_restore){ continue; }
-			}
-			
+			} else if (zfs_mode) {
+                if (entry.subvolume_name().length == 0){ continue; }
+                if (!App.snapshot_to_restore.subvolumes.has_key(entry.subvolume_name())){ continue; }
+                if ((entry.subvolume_name() == "/home") && !include_zfs_home_for_restore){ continue; }
+            }
+
 			string dev_name = entry.device.full_name_with_parent;
 			if (entry.subvolume_name().length > 0){
 				dev_name = dev_name + "(%s)".printf(entry.subvolume_name());
@@ -3047,6 +3196,48 @@ public class Main : GLib.Object{
 		return thr_success;
 	}
 
+    // TODO Implement
+	public bool restore_execute_zfs(){
+
+		log_debug("Main: restore_execute_zfs()");
+
+		bool ok = create_pre_restore_snapshot_zfs();
+
+		log_msg(string.nfill(78, '-'));
+
+		if (!ok){
+			thread_restore_running = false;
+			thr_success = false;
+			return thr_success;
+		}
+
+		// restore snapshot subvolumes by creating new subvolume snapshots
+
+		foreach(var subvol in snapshot_to_restore.subvolumes.values){
+
+			if ((subvol.name == "/home") && !include_zfs_home_for_restore){ continue; }
+
+			subvol.restore();
+		}
+
+		log_msg(_("Restore completed"));
+		thr_success = true;
+
+		if (restore_current_system){
+			log_msg(_("Snapshot will become active after system is rebooted."));
+		}
+
+		log_msg(string.nfill(78, '-'));
+
+		thread_restore_running = false;
+		return thr_success;
+	}
+
+	// TODO: Implement
+	public bool create_pre_restore_snapshot_zfs(){
+        return false;
+    }
+
 	public bool create_pre_restore_snapshot_btrfs(){
 
 		log_debug("Main: create_pre_restore_snapshot_btrfs()");
@@ -3165,7 +3356,7 @@ public class Main : GLib.Object{
 				var snap = Snapshot.write_control_file(
 					snapshot_path, dt_created, repo.device.uuid,
 					LinuxDistro.get_dist_info(path_combine(snapshot_path,"@")).full_name(),
-					"ondemand", "", 0, true, false, repo);
+					"ondemand", "", 0, true, false, false, repo);
 
 				snap.description = "Before restoring '%s'".printf(snapshot_to_restore.date_formatted);
 				snap.live = true;
@@ -3213,6 +3404,9 @@ public class Main : GLib.Object{
 		config.set_string_member("btrfs_mode", btrfs_mode.to_string());
 		config.set_string_member("include_btrfs_home_for_backup", include_btrfs_home_for_backup.to_string());
 		config.set_string_member("include_btrfs_home_for_restore", include_btrfs_home_for_restore.to_string());
+		config.set_string_member("zfs_mode", zfs_mode.to_string());
+		config.set_string_member("include_zfs_home_for_backup", include_zfs_home_for_backup.to_string());
+		config.set_string_member("include_zfs_home_for_restore", include_zfs_home_for_restore.to_string());
 		config.set_string_member("stop_cron_emails", stop_cron_emails.to_string());
 
 		config.set_string_member("schedule_monthly", schedule_monthly.to_string());
@@ -3310,7 +3504,8 @@ public class Main : GLib.Object{
 		bool do_first_run = json_get_bool(config, "do_first_run", false); // false as default
 
 		btrfs_mode = json_get_bool(config, "btrfs_mode", false); // false as default
-		
+		zfs_mode = json_get_bool(config, "zfs_mode", false); // false as default
+
 		if (do_first_run){
 			set_first_run_flag();
 		}
@@ -3329,6 +3524,10 @@ public class Main : GLib.Object{
 			btrfs_mode = cmd_btrfs_mode; //override
 		}
 		
+		if (cmd_zfs_mode != null){
+			zfs_mode = cmd_zfs_mode; //override
+		}
+
 		backup_uuid = json_get_string(config,"backup_device_uuid", backup_uuid);
 		backup_parent_uuid = json_get_string(config,"parent_device_uuid", backup_parent_uuid);
 
@@ -3396,14 +3595,22 @@ public class Main : GLib.Object{
 
 		// load some defaults for first-run based on user's system type
 		
-		bool supported = sys_subvolumes.has_key("@") && cmd_exists("btrfs"); // && sys_subvolumes.has_key("@home")
-		if (supported || (cmd_btrfs_mode == true)){
+		bool btrfs_supported = sys_subvolumes.has_key("@") && cmd_exists("btrfs"); // && sys_subvolumes.has_key("@home")
+		bool zfs_supported = sys_subvolumes.has_key("/") && cmd_exists("zfs"); // && sys_subvolumes.has_key("@home")
+
+		if (btrfs_supported || (cmd_btrfs_mode == true)){
 			log_msg(_("Selected default snapshot type") + ": %s".printf("BTRFS"));
+			zfs_mode = false;
 			btrfs_mode = true;
+		} else if (zfs_supported || (cmd_zfs_mode == true)) {
+		    log_msg(_("Selected default snapshot type") + ": %s".printf("ZFS"));
+			zfs_mode = true;
+			btrfs_mode = false;
 		}
 		else{
 			log_msg(_("Selected default snapshot type") + ": %s".printf("RSYNC"));
 			btrfs_mode = false;
+			zfs_mode = false;
 		}
 	}
 	
@@ -3415,13 +3622,13 @@ public class Main : GLib.Object{
 		log_debug("backup_parent_uuid=%s".printf(backup_parent_uuid));
 
 		// use system disk as snapshot device in btrfs mode for backup
-		if (((app_mode == "backup")||((app_mode == "ondemand"))) && btrfs_mode){
+		if (((app_mode == "backup")||((app_mode == "ondemand"))) && (btrfs_mode || zfs_mode)){
 			if (sys_root != null){
-				log_msg("Using system disk as snapshot device for creating snapshots in BTRFS mode");
+				log_msg("Using system disk as snapshot device for creating snapshots in BTRFS/ZFS mode");
 				if (cmd_backup_device.length > 0){
-					log_msg(_("Option --snapshot-device should not be specified for creating snapshots in BTRFS mode"));
+					log_msg(_("Option --snapshot-device should not be specified for creating snapshots in BTRFS or ZFS mode"));
 				}
-				repo = new SnapshotRepo.from_device(sys_root, parent_window, btrfs_mode);
+				repo = new SnapshotRepo.from_device(sys_root, parent_window, btrfs_mode, zfs_mode);
 			}
 			else{
 				log_error("System disk not found!");
@@ -3433,7 +3640,7 @@ public class Main : GLib.Object{
 			var cmd_dev = Device.get_device_by_name(cmd_backup_device);
 			if (cmd_dev != null){
 				log_debug("Using snapshot device specified as command argument: %s".printf(cmd_backup_device));
-				repo = new SnapshotRepo.from_device(cmd_dev, parent_window, btrfs_mode);
+				repo = new SnapshotRepo.from_device(cmd_dev, parent_window, btrfs_mode, zfs_mode);
 				// TODO: move this code to main window
 			}
 			else{
@@ -3466,12 +3673,12 @@ public class Main : GLib.Object{
 			// try unlocking encrypted parent
 			if ((dev_parent != null) && dev_parent.is_encrypted_partition() && !dev_parent.has_children()){
 				log_debug("Snapshot device is on an encrypted partition");
-				repo = new SnapshotRepo.from_uuid(backup_parent_uuid, parent_window, btrfs_mode);
+				repo = new SnapshotRepo.from_uuid(backup_parent_uuid, parent_window, btrfs_mode, zfs_mode);
 			}
 			// try device	
 			else if (dev != null){
 				log_debug("repo: creating from uuid");
-				repo = new SnapshotRepo.from_uuid(backup_uuid, parent_window, btrfs_mode);
+				repo = new SnapshotRepo.from_uuid(backup_uuid, parent_window, btrfs_mode, zfs_mode);
 			}
 			// try system disk
 			/*else {
@@ -3740,6 +3947,29 @@ public class Main : GLib.Object{
 		return repo.status_code;
 	}
 
+    // TODO Implement
+	public bool check_zfs_volume(Device dev, string subvol_names, bool unlock){
+		log_debug("check_zfs_volume():%s".printf(subvol_names));
+
+		string mnt_zfs = mount_point_app + "/zfs";
+		dir_create(mnt_zfs);
+
+		bool supported = true;
+
+		foreach(string subvol_name in subvol_names.split(",")){
+			supported = supported && dir_exists(path_combine(mnt_zfs,subvol_name));
+		}
+
+		if (Device.unmount(mnt_zfs)){
+			if (dir_exists(mnt_zfs) && dir_is_empty(mnt_zfs)){
+				dir_delete(mnt_zfs);
+				log_debug(_("Removed mount directory: '%s'").printf(mnt_zfs));
+			}
+		}
+
+		return supported;
+    }
+
 	public bool check_btrfs_volume(Device dev, string subvol_names, bool unlock){
 
 		log_debug("check_btrfs_volume():%s".printf(subvol_names));
@@ -3801,9 +4031,9 @@ public class Main : GLib.Object{
 		// check if currently selected device can be used
 		if (repo.available()){
 			if (check_device_for_backup(repo.device, false)){
-				if (repo.btrfs_mode != btrfs_mode){
+				if ((repo.btrfs_mode != btrfs_mode) && (repo.zfs_mode != zfs_mode)){
 					// reinitialize
-					repo = new SnapshotRepo.from_device(repo.device, parent_win, btrfs_mode);
+					repo = new SnapshotRepo.from_device(repo.device, parent_win, btrfs_mode, zfs_mode);
 				}
 				return;
 			}
@@ -3817,13 +4047,22 @@ public class Main : GLib.Object{
 		// In BTRFS mode, select the system disk if system disk is BTRFS
 		if (btrfs_mode && sys_subvolumes.has_key("@")){
 			var subvol_root = sys_subvolumes["@"];
-			repo = new SnapshotRepo.from_device(subvol_root.get_device(), parent_win, btrfs_mode);
+			repo = new SnapshotRepo.from_device(subvol_root.get_device(), parent_win, btrfs_mode, zfs_mode);
 			return;
 		}
-			
+
+		// In ZFS mode, select the system disk if system disk is ZFS
+        // TODO: Make this select the right thing
+		if (zfs_mode && sys_subvolumes.has_key("@")){
+			var subvol_root = sys_subvolumes["@"];
+			repo = new SnapshotRepo.from_device(subvol_root.get_device(), parent_win, btrfs_mode, zfs_mode);
+			return;
+		}
+
+
 		foreach(var dev in partitions){
 			if (check_device_for_backup(dev, false)){
-				repo = new SnapshotRepo.from_device(dev, parent_win, btrfs_mode);
+				repo = new SnapshotRepo.from_device(dev, parent_win, btrfs_mode, zfs_mode);
 				break;
 			}
 			else{
@@ -3840,6 +4079,10 @@ public class Main : GLib.Object{
 		
 		if (btrfs_mode && ((dev.fstype == "btrfs")||(dev.fstype == "luks"))){
 			if (check_btrfs_volume(dev, "@", unlock)){
+				return true;
+			}
+		} else if (zfs_mode && dev.fstype == "zfs") {
+			if (check_zfs_volume(dev, "/", unlock)){
 				return true;
 			}
 		}
@@ -3978,7 +4221,7 @@ public class Main : GLib.Object{
 
 		// TODO: move query_subvolume_info() and related methods to SnapshotRepo
 		
-		if ((repo == null) || !repo.btrfs_mode){
+		if ((repo == null) || (!repo.btrfs_mode && !repo.zfs_mode)){
 			return;
 		}
 		

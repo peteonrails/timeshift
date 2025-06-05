@@ -36,6 +36,7 @@ public class SnapshotRepo : GLib.Object{
 	public string mount_path = "";
 	public Gee.HashMap<string,string> mount_paths;
 	public bool btrfs_mode = false;
+	public bool zfs_mode = false;
 
 	public Gee.ArrayList<Snapshot?> snapshots;
 	public Gee.ArrayList<Snapshot?> invalid_snapshots;
@@ -51,19 +52,22 @@ public class SnapshotRepo : GLib.Object{
 	private bool thr_running = false;
 	private string thr_args1 = "";
 
-	public SnapshotRepo.from_path(string path, Gtk.Window? parent_win, bool _btrfs_mode){
+    // TODO: Refactor mutually exclusive flags into enumerated type
+	public SnapshotRepo.from_path(string path, Gtk.Window? parent_win, bool _btrfs_mode, bool _zfs_mode){
 
 		log_debug("SnapshotRepo: from_path()");
 		
 		this.mount_path = path;
 		this.parent_window = parent_win;
 		this.btrfs_mode = _btrfs_mode;
-		
+		this.zfs_mode = _zfs_mode;
+
 		snapshots = new Gee.ArrayList<Snapshot>();
 		invalid_snapshots = new Gee.ArrayList<Snapshot>();
 		mount_paths = new Gee.HashMap<string,string>();
-		
-		//log_debug("Selected snapshot repo path: %s".printf(path));
+
+		// TODO - this was commented out. Recomment it or delete it.
+		log_debug("Selected snapshot repo path: %s".printf(path));
 		
 		var list = Device.get_disk_space_using_df(path);
 		
@@ -78,15 +82,16 @@ public class SnapshotRepo : GLib.Object{
 		check_status();
 	}
 
-	public SnapshotRepo.from_device(Device dev, Gtk.Window? parent_win, bool btrfs_repo){
+	public SnapshotRepo.from_device(Device dev, Gtk.Window? parent_win, bool btrfs_repo, bool zfs_repo){
 
-		log_debug("SnapshotRepo: from_device(): %s".printf(btrfs_repo ? "BTRFS" : "RSYNC"));
+		log_debug("SnapshotRepo: from_device(): %s".printf(btrfs_repo ? "BTRFS" : zfs_repo ? "ZFS" : "RSYNC"));
 		
 		this.device = dev;
 		//this.use_snapshot_path_custom = false;
 		this.parent_window = parent_win;
 		this.btrfs_mode = btrfs_repo;
-		
+		this.zfs_mode = zfs_repo;
+
 		snapshots = new Gee.ArrayList<Snapshot>();
 		invalid_snapshots = new Gee.ArrayList<Snapshot>();
 		mount_paths = new Gee.HashMap<string,string>();
@@ -94,9 +99,9 @@ public class SnapshotRepo : GLib.Object{
 		init_from_device();
 	}
 
-	public SnapshotRepo.from_uuid(string uuid, Gtk.Window? parent_win, bool btrfs_repo){
+	public SnapshotRepo.from_uuid(string uuid, Gtk.Window? parent_win, bool btrfs_repo, bool zfs_repo){
 
-		log_debug("SnapshotRepo: from_uuid(): %s".printf(btrfs_repo ? "BTRFS" : "RSYNC"));
+		log_debug("SnapshotRepo: from_uuid(): %s".printf(btrfs_repo ? "BTRFS" : zfs_repo ? "ZFS" : "RSYNC"));
 		log_debug("uuid=%s".printf(uuid));
 		
 		device = Device.get_device_by_uuid(uuid);
@@ -108,7 +113,8 @@ public class SnapshotRepo : GLib.Object{
 		//this.use_snapshot_path_custom = false;
 		this.parent_window = parent_win;
 		this.btrfs_mode = btrfs_repo;
-		
+		this.zfs_mode = zfs_repo;
+
 		snapshots = new Gee.ArrayList<Snapshot>();
 		invalid_snapshots = new Gee.ArrayList<Snapshot>();
 		mount_paths = new Gee.HashMap<string,string>();
@@ -161,6 +167,10 @@ public class SnapshotRepo : GLib.Object{
 			if (btrfs_mode){
 				return path_combine(mount_path, "timeshift-btrfs");
 			}
+			else if (zfs_mode){
+                return path_combine(mount_path, "timeshift-zfs");
+            }
+
 			else{
 				return path_combine(mount_path, "timeshift");
 			}
@@ -222,6 +232,8 @@ public class SnapshotRepo : GLib.Object{
 					}
 				}
 			}
+		} else if (zfs_mode) {
+		  // TODO
 		}
 
 		load_snapshots();
@@ -263,6 +275,9 @@ public class SnapshotRepo : GLib.Object{
 		var mount_options = "";
 		if (btrfs_mode){
 			mount_options = "subvolid=0";
+		}
+		else if (zfs_mode){
+		   // TODO
 		}
 		bool ok = Device.mount(dev.uuid, path_to_mount, mount_options); // TODO: check if already mounted
 		
@@ -315,7 +330,7 @@ public class SnapshotRepo : GLib.Object{
 						
 						//log_debug("load_snapshots():" + snapshots_path + "/" + info.get_name());
 						
-						Snapshot bak = new Snapshot(snapshots_path + "/" + info.get_name(), btrfs_mode, this);
+						Snapshot bak = new Snapshot(snapshots_path + "/" + info.get_name(), btrfs_mode, zfs_mode, this);
 						if (bak.valid){
 							snapshots.add(bak);
 						}
@@ -362,7 +377,7 @@ public class SnapshotRepo : GLib.Object{
 			}
 		}
 
-		if (btrfs_mode){
+		if (btrfs_mode || zfs_mode){
 			App.query_subvolume_info(this);
 		}
 		
@@ -508,6 +523,7 @@ public class SnapshotRepo : GLib.Object{
 		var root_path = path_combine(mount_paths["@"],"@");
 		log_debug("root_path=%s".printf(root_path));
 		log_debug("btrfs_mode=%s".printf(btrfs_mode.to_string()));
+		log_debug("zfs_mode=%s".printf(zfs_mode.to_string()));
 		if (btrfs_mode){
 			if (!dir_exists(root_path)){
 				status_message = _("Selected snapshot device is not a system disk");
@@ -606,7 +622,7 @@ public class SnapshotRepo : GLib.Object{
 			log_msg("%-6s : %s".printf(_("Device"), device.device_name_with_parent));
 			log_msg("%-6s : %s".printf("UUID", device.uuid));
 			log_msg("%-6s : %s".printf(_("Path"), mount_path));
-			log_msg("%-6s : %s".printf(_("Mode"), btrfs_mode ? "BTRFS" : "RSYNC"));
+			log_msg("%-6s : %s".printf(_("Mode"), btrfs_mode ? "BTRFS" : zfs_mode ? "ZFS" : "RSYNC"));
 			log_msg("%-6s : %s".printf(_("Status"), status_message));
 			log_msg(status_details);
 		}
@@ -1015,5 +1031,6 @@ public enum SnapshotLocationStatus{
 	NO_SNAPSHOTS_HAS_SPACE = 3,
 	READ_ONLY_FS = 4,
 	HARDLINKS_NOT_SUPPORTED = 5,
-	NO_BTRFS_SYSTEM = 6
+	NO_BTRFS_SYSTEM = 6,
+	NO_ZFS_SYSTEM = 7
 }

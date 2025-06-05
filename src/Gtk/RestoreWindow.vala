@@ -279,6 +279,16 @@ class RestoreWindow : Gtk.Window{
 				notebook.page = Tabs.SUMMARY;
 			}
 		}
+		else if (App.zfs_mode){
+         	// TODO: Check mountpoint instead
+            if (App.snapshot_to_restore.subvolumes.has_key("/home")){
+
+                notebook.page = Tabs.USERS;
+            }
+            else {
+                notebook.page = Tabs.SUMMARY;
+            }
+        }
 		else{
 			notebook.page = Tabs.TARGET_DEVICE;
 		}
@@ -320,7 +330,7 @@ class RestoreWindow : Gtk.Window{
 		
 		switch(notebook.page){
 		case Tabs.TARGET_DEVICE:
-			if (!App.btrfs_mode && check_before_restore){
+			if (!App.btrfs_mode && !App.zfs_mode && check_before_restore){
 				notebook.page = Tabs.CHECK;
 			}
 			else{

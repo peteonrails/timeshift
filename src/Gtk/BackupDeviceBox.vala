@@ -99,6 +99,15 @@ class BackupDeviceBox : Gtk.Box{
 				_("Snapshots are saved to /timeshift-btrfs on selected partition. Other locations are not supported.")
 			);
 		}
+        // TODO - Snapshots are saved to the dataset specific snapshot subdirectory, not this timeshift-zfs place. Get this right.
+   		else if (App.zfs_mode){
+            lbl_common.label = "<i>• %s\n• %s\n• %s</i>".printf(
+                _("Devices displayed above have ZFS file systems."),
+                _("ZFS snapshots are saved on system partition. Other partitions are not supported."),
+                _("Snapshots are saved to /timeshift-zfs on selected partition. Other locations are not supported.")
+            );
+
+		}
 		else {
 			lbl_common.label = "<i>• %s\n• %s\n• %s\n• %s</i>".printf(
 				_("Devices displayed above have Linux file systems."),
@@ -359,7 +368,7 @@ class BackupDeviceBox : Gtk.Box{
 
 			bool found_child = false;
 
-			if ((App.btrfs_mode && (dev.fstype == "btrfs")) || (!App.btrfs_mode && dev.has_linux_filesystem())){
+			if ((App.btrfs_mode && (dev.fstype == "btrfs")) || (App.zfs_mode && (dev.fstype == "zfs")) || (!App.btrfs_mode && dev.has_linux_filesystem())){
 				
 				change_backup_device(dev);
 				found_child = true;
@@ -371,7 +380,7 @@ class BackupDeviceBox : Gtk.Box{
 				
 				foreach (var child in dev.children){
 					
-					if ((App.btrfs_mode && (child.fstype == "btrfs")) || (!App.btrfs_mode && child.has_linux_filesystem())){
+					if ((App.btrfs_mode && (child.fstype == "btrfs")) || (App.zfs_mode && (dev.fstype == "zfs")) || ((!App.btrfs_mode && !App.zfs_mode) && child.has_linux_filesystem())){
 						
 						change_backup_device(child);
 						found_child = true;
@@ -387,6 +396,10 @@ class BackupDeviceBox : Gtk.Box{
 				if (App.btrfs_mode){
 					msg = _("Selected device does not have BTRFS partition");
 				}
+				else if (App.zfs_mode){
+                    msg = _("Selected device does not have ZFS partition");
+                }
+
 				
 				lbl_infobar_location.label = "<span weight=\"bold\">%s</span>".printf(msg);
 				infobar_location.message_type = Gtk.MessageType.ERROR;
@@ -425,7 +438,7 @@ class BackupDeviceBox : Gtk.Box{
 		log_msg("selected device: %s".printf(pi.device));
 		log_debug("fstype: %s".printf(pi.fstype));
 
-		App.repo = new SnapshotRepo.from_device(pi, parent_window, App.btrfs_mode);
+		App.repo = new SnapshotRepo.from_device(pi, parent_window, App.btrfs_mode, App.zfs_mode);
 
 		if (pi.fstype == "luks"){
 			
@@ -442,7 +455,7 @@ class BackupDeviceBox : Gtk.Box{
 					log_debug("has linux filesystem: %s".printf(dev.children[0].fstype));
 					log_msg("selecting child device: %s".printf(dev.children[0].device));
 						
-					App.repo = new SnapshotRepo.from_device(dev.children[0], parent_window, App.btrfs_mode);
+					App.repo = new SnapshotRepo.from_device(dev.children[0], parent_window, App.btrfs_mode, App.zfs_mode);
 					tv_devices_refresh();
 				}
 				else{
@@ -624,7 +637,22 @@ class BackupDeviceBox : Gtk.Box{
 					continue;
 				}
 			}
-			
+
+			if (App.zfs_mode){
+				if (part.is_encrypted_partition() && (!part.has_children() || (part.children[0].fstype == "zfs_member"))){
+					//ok
+				}
+				else if (part.is_lvm_partition() && (!part.has_children() || (part.children[0].fstype == "zfs_member"))){
+					//ok
+				}
+				else if (part.fstype == "zfs"){
+					//ok
+				}
+				else{
+					continue;
+				}
+			}
+
 			if (part.pkname == parent.kname) {
 				
 				TreeIter iter1;

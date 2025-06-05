@@ -96,7 +96,7 @@ class DeleteBox : Gtk.Box{
 			App.delete_begin();
 		}
 
-		if (App.btrfs_mode){
+		if (App.btrfs_mode || App.zfs_mode){
 			
 			while (App.thread_delete_running){
 				

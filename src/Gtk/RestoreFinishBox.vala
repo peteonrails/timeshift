@@ -92,13 +92,13 @@ class RestoreFinishBox : Gtk.Box{
 			
 			string bullet = "• ";
 
-			if (App.btrfs_mode && App.restore_current_system){
+			if ((App.btrfs_mode || App.zfs_mode) && App.restore_current_system){
 				msg += bullet + _("Restored subvolumes will become active after system is restarted.") + "\n";
 				msg += "\n";
 				msg += bullet + _("You can continue working on the current system. After restart, the current system will be visible as a new snapshot. This snapshot can be restored later if required, to 'undo' the restore.") + "\n";
 			}
 
-			if (!App.btrfs_mode){
+			if (!App.btrfs_mode && !App.zfs_mode){
 				msg += bullet + _("If the restored system fails to boot, then boot from the Live CD/USB, install Timeshift, and try restoring another snapshot.") + "\n\n";
 			}
 

@@ -105,7 +105,7 @@ class SettingsWindow : Gtk.Window{
 		stack.add_titled (misc_box, "misc", _("Misc"));
 
 		backend_box.type_changed.connect(()=>{
-			exclude_box.visible = !App.btrfs_mode;
+			exclude_box.visible = (!App.btrfs_mode && !App.zfs_mode);
 			backup_dev_box.refresh();
 			users_box.refresh();
 		});

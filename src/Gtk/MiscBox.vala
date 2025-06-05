@@ -168,7 +168,7 @@ class MiscBox : Gtk.Box{
 
 	public void refresh(){
 
-		if (App.btrfs_mode){
+		if (App.btrfs_mode || App.zfs_mode){
 
 			//chk_include_btrfs_home.active = App.include_btrfs_home_for_restore;
 		}

@@ -206,7 +206,7 @@ class BackupWindow : Gtk.Window{
 		
 		// set initial tab
 
-		if (App.btrfs_mode){
+		if (App.btrfs_mode || App.zfs_mode){
 			notebook.page = Tabs.BACKUP;
 		}
 		else{

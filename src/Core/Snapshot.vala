@@ -52,15 +52,17 @@ public class Snapshot : GLib.Object{
 	public LinuxDistro distro;
 	public SnapshotRepo repo;
 	
-	//btrfs
+	// btrfs and zfs
 	public bool btrfs_mode = false;
-	public Gee.HashMap<string,string> paths; // for btrfs snapshots only
+	public bool zfs_mode = false;
+	public Gee.HashMap<string,string> paths; // for btrfs and zfs snapshots only
 	public string mount_path_root = "";
 	public string mount_path_home = "";
 	
 	public DeleteFileTask delete_file_task;
 
-	public Snapshot(string dir_path, bool btrfs_snapshot, SnapshotRepo _repo){
+    // TODO: Refactor dual exclusive flags to an enumerated type for the constructor
+	public Snapshot(string dir_path, bool btrfs_snapshot, bool zfs_snapshot, SnapshotRepo _repo){
 
 		try{
 			var f = File.new_for_path(dir_path);
@@ -70,6 +72,7 @@ public class Snapshot : GLib.Object{
 			name = info.get_name();
 			description = "";
 			btrfs_mode = btrfs_snapshot;
+			zfs_mode = zfs_snapshot;
 			repo = _repo;
 			
 			date = new DateTime.from_unix_utc(0);
@@ -358,7 +361,7 @@ public class Snapshot : GLib.Object{
 				config.set_string_member("comments", description);
 				config.set_string_member("live", live.to_string());
 
-				if (btrfs_mode){
+				if (btrfs_mode || zfs_mode){
 					var subvols = new Json.Object();
 					config.set_object_member("subvolumes",subvols);
 					foreach(var subvol in subvolumes.values){
@@ -393,7 +396,7 @@ public class Snapshot : GLib.Object{
 	
 	public static Snapshot write_control_file(
 		string snapshot_path, DateTime dt_created, string root_uuid, string distro_full_name, 
-		string tag, string comments, int64 item_count, bool is_btrfs, bool is_live, SnapshotRepo repo, bool silent = false){
+		string tag, string comments, int64 item_count, bool is_btrfs, bool is_zfs, bool is_live, SnapshotRepo repo, bool silent = false){
 			
 		var ctl_path = snapshot_path + "/info.json";
 		var config = new Json.Object();
@@ -406,7 +409,7 @@ public class Snapshot : GLib.Object{
 		config.set_string_member("tags", tag);
 		config.set_string_member("comments", comments);
 		config.set_string_member("live", is_live.to_string());
-		config.set_string_member("type", (is_btrfs ? "btrfs" : "rsync"));
+		config.set_string_member("type", (is_btrfs ? "btrfs" : is_zfs ? "zfs" : "rsync"));
 
 		var json = new Json.Generator();
 		json.pretty = true;
@@ -430,7 +433,7 @@ public class Snapshot : GLib.Object{
 			log_msg(_("Created control file") + ": %s".printf(ctl_path));
 		}
 
-	    return (new Snapshot(snapshot_path, is_btrfs, repo));
+	    return (new Snapshot(snapshot_path, is_btrfs, is_zfs, repo));
 	}
 
 	// check
@@ -467,8 +470,8 @@ public class Snapshot : GLib.Object{
 
 		bool status = true;
 		
-		if (btrfs_mode){
-			status = remove_btrfs();
+		if (btrfs_mode || zfs_mode) {
+			status = remove_btrfs_and_zfs();
 		}
 		else{
 			status = remove_rsync(wait);
@@ -514,7 +517,8 @@ public class Snapshot : GLib.Object{
 		return true;
 	}
 
-	public bool remove_btrfs(){
+    // TODO: Make sure this works with ZFS
+	public bool remove_btrfs_and_zfs(){
 
 		log_msg(string.nfill(78, '-'));
 		
@@ -557,7 +561,7 @@ public class Snapshot : GLib.Object{
 		
 		return true;
 	}
-	
+
 	public void mark_for_deletion(){
 		
 		string delete_trigger_file = path + "/delete";

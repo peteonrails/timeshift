@@ -111,7 +111,7 @@ class MainWindow : Gtk.Window{
 		if ((App.repo == null) || !App.repo.available()){
 			if (App.backup_parent_uuid.length > 0){
 				log_debug("repo: creating from parent uuid");
-				App.repo = new SnapshotRepo.from_uuid(App.backup_parent_uuid, this, App.btrfs_mode);
+				App.repo = new SnapshotRepo.from_uuid(App.backup_parent_uuid, this, App.btrfs_mode, App.zfs_mode);
 			}
 		}
 
@@ -502,6 +502,11 @@ class MainWindow : Gtk.Window{
 			return;
 		}
 
+		if (App.zfs_mode && (App.check_zfs_layout_system(this) == false)){
+			ui_sensitive(true);
+			return;
+		}
+
 		// check snapshot device -----------
 
 		if (!App.repo.available()){
@@ -680,7 +685,7 @@ class MainWindow : Gtk.Window{
 				Snapshot bak;
 				store.get (iter, 0, out bak);
 
-				if (App.btrfs_mode){
+				if (App.btrfs_mode || App.zfs_mode){
 					exo_open_folder(bak.path, false);
 				}
 				else{
@@ -865,13 +870,14 @@ class MainWindow : Gtk.Window{
 		this.hide();
 
 		bool btrfs_mode_prev = App.btrfs_mode;
-		
+		bool zfs_mode_prev = App.zfs_mode;
+
 		var win = new SettingsWindow();
 		win.set_transient_for(this);
 		win.destroy.connect(()=>{
 			btn_settings.sensitive = true;
 			btn_wizard.sensitive = true;
-			settings_changed(btrfs_mode_prev);
+			settings_changed(btrfs_mode_prev, zfs_mode_prev);
 		});
 	}
 
@@ -885,25 +891,26 @@ class MainWindow : Gtk.Window{
 		this.hide();
 		
 		bool btrfs_mode_prev = App.btrfs_mode;
-		
+		bool zfs_mode_prev = App.zfs_mode;
+
 		var win = new SetupWizardWindow();
 		win.set_transient_for(this);
 		win.destroy.connect(()=>{
 			btn_settings.sensitive = true;
 			btn_wizard.sensitive = true;
-			settings_changed(btrfs_mode_prev);
+			settings_changed(btrfs_mode_prev, zfs_mode_prev);
 		});
 	}
 
-	private void settings_changed(bool btrfs_mode_prev){
+	private void settings_changed(bool btrfs_mode_prev, bool zfs_mode_prev){
 
-		if (btrfs_mode_prev != App.btrfs_mode){
+		if ((btrfs_mode_prev != App.btrfs_mode) || (zfs_mode_prev != App.zfs_mode)){
 			if ((App.repo != null) && (App.repo.device != null) && (App.repo.device.uuid.length > 0)){
-				App.repo = new SnapshotRepo.from_uuid(App.repo.device.uuid, this, App.btrfs_mode);
+				App.repo = new SnapshotRepo.from_uuid(App.repo.device.uuid, this, App.btrfs_mode, App.zfs_mode);
 			}
 			else{
-				if ((App.sys_root != null) && (App.sys_root.fstype == "btrfs")){
-					App.repo = new SnapshotRepo.from_uuid(App.sys_root.uuid, this, App.btrfs_mode);
+				if ((App.sys_root != null) && (App.sys_root.fstype == "btrfs" || App.sys_root.fstype == "zfs")){
+					App.repo = new SnapshotRepo.from_uuid(App.sys_root.uuid, this, App.btrfs_mode, App.zfs_mode);
 				}
 				else{
 					App.repo = new SnapshotRepo.from_null();
@@ -1060,7 +1067,7 @@ class MainWindow : Gtk.Window{
 				scrolled_snap_count.show_all();
 				
 				lbl_snap_count.label = format_text_large("%0d".printf(App.repo.snapshots.size));
-				string mode = App.btrfs_mode ? "btrfs" : "rsync";
+				string mode = App.btrfs_mode ? "btrfs" : App.zfs_mode ? "zfs" : "rsync";
 				lbl_snap_count_subnote.label = format_text(mode, false, true, false);
 				
 				scrolled_free_space.no_show_all = false;

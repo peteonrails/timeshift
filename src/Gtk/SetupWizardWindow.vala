@@ -298,7 +298,7 @@ class SetupWizardWindow : Gtk.Window{
 
 		switch(notebook.page){
 		case Tabs.SNAPSHOT_BACKEND:
-			if (App.btrfs_mode){
+			if (App.btrfs_mode || App.zfs_mode){
 				notebook.page = Tabs.BACKUP_DEVICE;
 			}
 			else{
@@ -391,7 +391,7 @@ class SetupWizardWindow : Gtk.Window{
 			backend_box.refresh();
 			break;
 		case Tabs.ESTIMATE:
-			if (App.btrfs_mode){
+			if (App.btrfs_mode || App.zfs_mode){
 				go_next();
 			}
 			else{

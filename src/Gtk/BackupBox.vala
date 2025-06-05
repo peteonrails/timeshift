@@ -186,7 +186,7 @@ class BackupBox : Gtk.Box{
 			return false;
 		}
 
-		if (App.btrfs_mode){
+		if (App.btrfs_mode || App.zfs_mode){
 			
 			while (thread_is_running){
 				

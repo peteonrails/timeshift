@@ -36,6 +36,7 @@ class SnapshotBackendBox : Gtk.Box{
 	
 	private Gtk.RadioButton opt_rsync;
 	private Gtk.RadioButton opt_btrfs;
+	private Gtk.RadioButton opt_zfs;
 	private Gtk.Label lbl_description;
 	private Gtk.Window parent_window;
 	
@@ -69,6 +70,8 @@ class SnapshotBackendBox : Gtk.Box{
 
 		add_opt_btrfs(vbox);
 
+		add_opt_zfs(vbox);
+
 		add_description();
 	}
 
@@ -82,6 +85,7 @@ class SnapshotBackendBox : Gtk.Box{
 		opt_rsync.toggled.connect(()=>{
 			if (opt_rsync.active){
 				App.btrfs_mode = false;
+				App.zfs_mode = false;
 				Main.first_snapshot_size = 0;
 				init_backend();
 				type_changed();
@@ -97,7 +101,7 @@ class SnapshotBackendBox : Gtk.Box{
 		hbox.add (opt);
 		opt_btrfs = opt;
 
-        if (!check_for_btrfs_tools()) {
+        if (!check_for_filesystem_tools("btrfs")) {
             opt.sensitive = false;
             opt_rsync.active = true;
         }
@@ -112,7 +116,29 @@ class SnapshotBackendBox : Gtk.Box{
 		});
 	}
 
-	private bool check_for_btrfs_tools() {
+	private void add_opt_zfs(Gtk.Box hbox){
+
+		var opt = new RadioButton.with_label_from_widget(opt_rsync, _("ZFS"));
+		opt.set_tooltip_markup(_("Create snapshots using ZFS"));
+		hbox.add (opt);
+		opt_zfs = opt;
+
+        if (!check_for_filesystem_tools("zfs")) {
+            opt.sensitive = false;
+            opt_rsync.active = true;
+        }
+
+		opt_zfs.toggled.connect(()=>{
+			if (opt_zfs.active){
+				App.zfs_mode = true;
+				init_backend();
+				type_changed();
+				update_description();
+			}
+		});
+	}
+
+	private bool check_for_filesystem_tools(string fstype) {
         try {
             const string args[] = {"lsblk", "-o", "FSTYPE", null};
             var proc = new Subprocess.newv(
@@ -124,7 +150,7 @@ class SnapshotBackendBox : Gtk.Box{
             if (proc.communicate(null, null, out stdout, null)) {
                 string output = (string) Bytes.unref_to_data(stdout);
 
-                if (output.contains("btrfs")) {
+                if (output.contains(fstype)) {
                     return true;
                 }
             }
@@ -210,9 +236,9 @@ class SnapshotBackendBox : Gtk.Box{
 	}
 
 	public void refresh(){
-		
 		opt_btrfs.active = App.btrfs_mode;
-		type_changed();
+		opt_zfs.active = App.zfs_mode;
+        type_changed();
 		update_description();
 	}
 }
