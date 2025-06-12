@@ -102,7 +102,7 @@ class BackupDatasetsBox : Gtk.Box{
 		Gtk.CellRendererToggle cell_radio;
 		Gtk.CellRendererText cell_text;
 
-		var col = add_column_icon_radio_text(zfs_datasets, _("Dataset"),
+		var col = add_column_icon_radio_text(zfs_datasets, _("Select"),
 			out cell_pix, out cell_radio, out cell_text);
 
 		col.resizable = true;
@@ -114,6 +114,19 @@ class BackupDatasetsBox : Gtk.Box{
             ((Gtk.CellRendererText)cell).text = dev.name;
 		});
 
+        // Dataset
+
+        col = add_column_text(zfs_datasets, _("Dataset"), out cell_text);
+
+        col.set_cell_data_func(cell_text, (cell_layout, cell, model, iter)=>{
+            Zvol dev;
+            model.get (iter, 0, out dev, -1);
+            ((Gtk.CellRendererText)cell).text = dev.name;
+//            ((Gtk.CellRendererText)cell).sensitive = (dev.type != "disk");
+        });
+
+
+
         // type
 
         col = add_column_text(zfs_datasets, _("Type"), out cell_text);
@@ -121,7 +134,7 @@ class BackupDatasetsBox : Gtk.Box{
         col.set_cell_data_func(cell_text, (cell_layout, cell, model, iter)=>{
             Zvol dev;
             model.get (iter, 0, out dev, -1);
-            ((Gtk.CellRendererText)cell).text = "ZFS Dataset";
+            ((Gtk.CellRendererText)cell).text = dev.type;
 //            ((Gtk.CellRendererText)cell).sensitive = (dev.type != "disk");
         });
 
@@ -152,21 +165,36 @@ class BackupDatasetsBox : Gtk.Box{
 
 //            ((Gtk.CellRendererText)cell).sensitive = (dev.type != "disk");
         });
+        
+        // Refer
 
-        // name
+        col = add_column_text(zfs_datasets, _("Refer"), out cell_text);
+        cell_text.xalign = (float) 1.0;
 
-        col = add_column_text(zfs_datasets, _("Name"), out cell_text);
+        col.set_cell_data_func(cell_text, (cell_layout, cell, model, iter)=>{
+            Zvol dev;
+            model.get (iter, 0, out dev, -1);
+
+            ((Gtk.CellRendererText)cell).text = dev.refer;
+
+//            ((Gtk.CellRendererText)cell).sensitive = (dev.type != "disk");
+        });
+
+
+        // Encryption
+
+        col = add_column_text(zfs_datasets, _("Encryption"), out cell_text);
         cell_text.xalign = 0.0f;
 
         col.set_cell_data_func(cell_text, (cell_layout, cell, model, iter)=>{
             Zvol dev;
             model.get (iter, 0, out dev, -1);
 
-            ((Gtk.CellRendererText)cell).text = dev.name;
+            ((Gtk.CellRendererText)cell).text = dev.encryption;
 //            ((Gtk.CellRendererText)cell).sensitive = (dev.type != "disk");
         });
 
-        // label
+        // Mountpoint
 
         col = add_column_text(zfs_datasets, _("Mountpoint"), out cell_text);
         cell_text.xalign = 0.0f;
@@ -179,6 +207,33 @@ class BackupDatasetsBox : Gtk.Box{
 
     //        ((Gtk.CellRendererText)cell).sensitive = (dev.type != "disk");
         });
+
+        // Mounted?
+        col = add_column_text(zfs_datasets, _("Mounted?"), out cell_text);
+        cell_text.xalign = 0.0f;
+
+        col.set_cell_data_func(cell_text, (cell_layout, cell, model, iter)=>{
+            Zvol dev;
+            model.get (iter, 0, out dev, -1);
+
+            ((Gtk.CellRendererText)cell).text = dev.mounted ? "Yes" : "No";
+
+    //        ((Gtk.CellRendererText)cell).sensitive = (dev.type != "disk");
+        });
+
+        // Creation
+        col = add_column_text(zfs_datasets, _("Creation Date"), out cell_text);
+        cell_text.xalign = 0.0f;
+
+        col.set_cell_data_func(cell_text, (cell_layout, cell, model, iter)=>{
+            Zvol dev;
+            model.get (iter, 0, out dev, -1);
+
+            ((Gtk.CellRendererText)cell).text = dev.creation;
+
+    //        ((Gtk.CellRendererText)cell).sensitive = (dev.type != "disk");
+        });
+
 
         // buffer
 

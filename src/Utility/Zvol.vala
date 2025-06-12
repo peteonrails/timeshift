@@ -41,6 +41,10 @@ public class Zvol : GLib.Object {
     public string available;
     public string refer;
     public string mountpoint;
+    public bool mounted;
+    public string encryption;
+    public string type;
+    public string creation;
     public string dist_info;
 
     public Zvol() {
@@ -57,8 +61,7 @@ public class Zvol : GLib.Object {
         string std_err;
         string cmd;
         int ret_val;
-
-        cmd = "zfs list -t filesystem -H"; // NAME USED AVAIL REFER MOUNTPOINT
+        cmd = "zfs list -t filesystem -r -H -o name,used,avail,refer,mountpoint,mounted,encryption,type,creation";
         ret_val = exec_sync(cmd, out std_out, out std_err);
 
         log_debug(std_out);
@@ -67,13 +70,16 @@ public class Zvol : GLib.Object {
 			if (line.strip().length == 0) { continue; }
             Zvol dataset = new Zvol();
             try {
-                // NAME USED AVAIL REFER MOUNTPOINT
                 string[] zvol_data = line.split("\t");
                 dataset.name        = zvol_data[0];
                 dataset.used        = zvol_data[1];
                 dataset.available   = zvol_data[2];
                 dataset.refer       = zvol_data[3];
                 dataset.mountpoint  = zvol_data[4];
+                dataset.mounted     = (zvol_data[5] == "yes");
+                dataset.encryption  = zvol_data[6];
+                dataset.type        = zvol_data[7];
+                dataset.creation    = zvol_data[8];
             } catch (Error e) {
                 throw(e);
             }
