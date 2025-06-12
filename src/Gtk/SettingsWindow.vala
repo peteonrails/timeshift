@@ -110,13 +110,16 @@ class SettingsWindow : Gtk.Window{
 
 		backend_box.type_changed.connect(()=>{
 			exclude_box.visible = (!App.btrfs_mode && !App.zfs_mode);
-			backup_dev_box.visible = !App.zfs_mode;
 
-            backup_datasets_box.visible = App.zfs_mode;
             backup_datasets_box.refresh();
+			backup_datasets_box.visible = App.zfs_mode;
 
 			backup_dev_box.refresh();
+			backup_dev_box.visible = !App.zfs_mode;
+
 			users_box.refresh();
+			users_box.visible = !App.zfs_mode;
+
 		});
 
 		stack.set_visible_child_name("type");
