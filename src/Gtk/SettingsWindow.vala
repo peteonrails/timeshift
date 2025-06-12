@@ -40,6 +40,7 @@ class SettingsWindow : Gtk.Window{
 	
 	private SnapshotBackendBox backend_box;
 	private BackupDeviceBox backup_dev_box;
+	private BackupDatasetsBox backup_datasets_box;
 	private ScheduleBox schedule_box;
 	private ExcludeBox exclude_box;
 	private UsersBox users_box;
@@ -89,6 +90,9 @@ class SettingsWindow : Gtk.Window{
 		backup_dev_box = new BackupDeviceBox(this);
 		stack.add_titled (backup_dev_box, "location", _("Location"));
 
+		backup_datasets_box = new BackupDatasetsBox(this);
+		stack.add_titled (backup_datasets_box, "datasets", _("Datasets"));
+
 		schedule_box = new ScheduleBox(this);
 		stack.add_titled (schedule_box, "schedule", _("Schedule"));
 
@@ -106,6 +110,11 @@ class SettingsWindow : Gtk.Window{
 
 		backend_box.type_changed.connect(()=>{
 			exclude_box.visible = (!App.btrfs_mode && !App.zfs_mode);
+			backup_dev_box.visible = !App.zfs_mode;
+
+            backup_datasets_box.visible = App.zfs_mode;
+            backup_datasets_box.refresh();
+
 			backup_dev_box.refresh();
 			users_box.refresh();
 		});

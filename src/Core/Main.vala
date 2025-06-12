@@ -54,12 +54,13 @@ public class Main : GLib.Object{
 	public bool include_btrfs_home_for_restore = false;
 	
 	public bool zfs_mode = false;
-	public bool include_zfs_home_for_backup = false;
-	public bool include_zfs_home_for_restore = false;
+	public Gee.ArrayList<string> zfs_datasets_to_snapshot;
 
 	public bool stop_cron_emails = true;
 	
 	public Gee.ArrayList<Device> partitions;
+	public Gee.ArrayList<Zvol> datasets;
+
 
 	public Gee.ArrayList<string> exclude_list_user;
 	public Gee.ArrayList<string> exclude_list_default;
@@ -332,10 +333,13 @@ public class Main : GLib.Object{
 		delete_file_task = new DeleteFileTask();
 
 		update_partitions();
-		
+
+
 		detect_system_devices();
 
 		detect_encrypted_dirs();
+
+		detect_zfs_datasets();
 
 		// set settings from config file ---------------------
 
@@ -1777,12 +1781,10 @@ public class Main : GLib.Object{
             string snapshot_path = "";
     		// create subvolume snapshots
 
-            // TODO: Use mountpoints to find this volume and the home volume below
-    		var subvol_names = new string[] { "rpool/manjaro/root" };
+            // TODO: Read this value from the JSON file
+            // TODO: Use mountpoints to set this value in the JSON file
 
-    		if (include_zfs_home_for_backup){
-    			subvol_names = new string[] { "rpool/manjaro/root","zdata/home" };
-    		}
+    		var subvol_names = new string[] { "rpool/manjaro/root" };
 
     		foreach(var subvol_name in subvol_names){
     			string cmd = "zfs snapshot '%s'@'%s' \n".printf(subvol_name, snapshot_name);
@@ -2357,10 +2359,6 @@ public class Main : GLib.Object{
                 log_error(_("ZFS device is not mounted") + ": /");
                 return false;
             }
-            if (include_zfs_home_for_restore && (repo.mount_paths["/home"].length == 0)){
-                log_error(_("ZFS device is not mounted") + ": /home");
-                return false;
-            }
         }
 		else{
 			if (dst_root == null){
@@ -2446,7 +2444,7 @@ public class Main : GLib.Object{
 			} else if (zfs_mode) {
                 if (entry.subvolume_name().length == 0){ continue; }
                 if (!App.snapshot_to_restore.subvolumes.has_key(entry.subvolume_name())){ continue; }
-                if ((entry.subvolume_name() == "/home") && !include_zfs_home_for_restore){ continue; }
+//                if ((entry.subvolume_name() == "/home") && !include_zfs_home_for_restore){ continue; }
 			}
 			
 			string dev_name = entry.device.full_name_with_parent;
@@ -2486,7 +2484,7 @@ public class Main : GLib.Object{
 			} else if (zfs_mode) {
                 if (entry.subvolume_name().length == 0){ continue; }
                 if (!App.snapshot_to_restore.subvolumes.has_key(entry.subvolume_name())){ continue; }
-                if ((entry.subvolume_name() == "/home") && !include_zfs_home_for_restore){ continue; }
+//                if ((entry.subvolume_name() == "/home") && !include_zfs_home_for_restore){ continue; }
             }
 
 			string dev_name = entry.device.full_name_with_parent;
@@ -3215,7 +3213,7 @@ public class Main : GLib.Object{
 
 		foreach(var subvol in snapshot_to_restore.subvolumes.values){
 
-			if ((subvol.name == "/home") && !include_zfs_home_for_restore){ continue; }
+//			if ((subvol.name == "/home") && !include_zfs_home_for_restore){ continue; }
 
 			subvol.restore();
 		}
@@ -3405,8 +3403,6 @@ public class Main : GLib.Object{
 		config.set_string_member("include_btrfs_home_for_backup", include_btrfs_home_for_backup.to_string());
 		config.set_string_member("include_btrfs_home_for_restore", include_btrfs_home_for_restore.to_string());
 		config.set_string_member("zfs_mode", zfs_mode.to_string());
-		config.set_string_member("include_zfs_home_for_backup", include_zfs_home_for_backup.to_string());
-		config.set_string_member("include_zfs_home_for_restore", include_zfs_home_for_restore.to_string());
 		config.set_string_member("stop_cron_emails", stop_cron_emails.to_string());
 
 		config.set_string_member("schedule_monthly", schedule_monthly.to_string());
@@ -3439,6 +3435,13 @@ public class Main : GLib.Object{
 			arr.add_string_element(path);
 		}
 		config.set_array_member("exclude",arr);
+
+		arr = new Json.Array();
+		foreach(string dataset in zfs_datasets_to_snapshot){
+			arr.add_string_element(dataset);
+		}
+		config.set_array_member("zfs_datasets_to_snapshot", arr);
+
 
 		arr = new Json.Array();
 		foreach(var name in exclude_app_names){
@@ -3706,12 +3709,27 @@ public class Main : GLib.Object{
 	
 	//core functions
 
+    public void update_datasets() {
+        log_debug("update_datasets()");
+
+        datasets.clear();
+
+        datasets = Zvol.filesystems();
+
+        if (datasets.size == 0){
+            log_error("ts: " + _("Failed to get ZFS dataset list."));
+        }
+
+        log_debug("ZFS dataset list updated");
+    }
+
 	public void update_partitions(){
 
 		log_debug("update_partitions()");
 		
 		partitions.clear();
 		
+		partitions = Device.get_filesystems();
 		partitions = Device.get_filesystems();
 
 		foreach(var pi in partitions){
@@ -3732,6 +3750,12 @@ public class Main : GLib.Object{
 
 		log_debug("partition list updated");
 	}
+
+
+    public void detect_zfs_datasets() {
+		log_debug("detect_zfs_datasets()");
+		datasets = Zvol.filesystems();
+    }
 
 	public void detect_system_devices(){
 

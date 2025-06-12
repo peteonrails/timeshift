@@ -42,7 +42,7 @@ class UsersBox : Gtk.Box{
 	private Gtk.Box box_zfs;
 	private Gtk.Label lbl_message;
 	private Gtk.CheckButton chk_include_btrfs_home;
-	private Gtk.CheckButton chk_include_zfs_home;
+//	private Gtk.CheckButton chk_include_zfs_home;
 	private bool restore_mode = false;
 	
 	public UsersBox (Gtk.Window _parent_window, ExcludeBox _exclude_box, bool _restore_mode) {
@@ -348,24 +348,25 @@ class UsersBox : Gtk.Box{
 
 		if (restore_mode){
 
-			chk_include_zfs_home = new Gtk.CheckButton.with_label(_("Restore /home dataset"));
+//			chk_include_zfs_home = new Gtk.CheckButton.with_label(_("Restore /home dataset"));
 
-			box.add(chk_include_zfs_home);
+//			box.add(chk_include_zfs_home);
 
-			chk_include_zfs_home.toggled.connect(()=>{
-				App.include_zfs_home_for_restore = chk_include_zfs_home.active;
-			});
+//			chk_include_zfs_home.toggled.connect(()=>{
+//				App.include_zfs_home_for_restore = chk_include_zfs_home.active;
+
+//			});
 
 		}
 		else {
 
-			chk_include_zfs_home = new Gtk.CheckButton.with_label(_("Include /home dataset in backups"));
+//			chk_include_zfs_home = new Gtk.CheckButton.with_label(_("Include /home dataset in backups"));
 
-			box.add(chk_include_zfs_home);
+//			box.add(chk_include_zfs_home);
 
-			chk_include_zfs_home.toggled.connect(()=>{
-				App.include_zfs_home_for_backup = chk_include_zfs_home.active;
-			});
+//			chk_include_zfs_home.toggled.connect(()=>{
+//				App.include_zfs_home_for_backup = chk_include_zfs_home.active;
+//			});
 		}
 	}
 
@@ -403,10 +404,10 @@ class UsersBox : Gtk.Box{
 			box_zfs.show_all();
 
 			if (restore_mode){
-				chk_include_zfs_home.active = App.include_zfs_home_for_restore;
+//				chk_include_zfs_home.active = App.include_zfs_home_for_restore;
 			}
 			else{
-				chk_include_zfs_home.active = App.include_zfs_home_for_backup;
+//				chk_include_zfs_home.active = App.include_zfs_home_for_backup;
 			}
 		}
 		else{

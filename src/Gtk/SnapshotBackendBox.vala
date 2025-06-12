@@ -65,13 +65,9 @@ class SnapshotBackendBox : Gtk.Box{
 		var vbox = new Gtk.Box(Gtk.Orientation.VERTICAL, 6);
 		//hbox.homogeneous = true;
 		add(vbox);
-		
 		add_opt_rsync(vbox);
-
 		add_opt_btrfs(vbox);
-
 		add_opt_zfs(vbox);
-
 		add_description();
 	}
 

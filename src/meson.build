@@ -48,6 +48,7 @@ sources_utility = files([
   'Utility/TeeJee.Misc.vala',
   'Utility/TeeJee.Process.vala',
   'Utility/TeeJee.System.vala',
+  'Utility/Zvol.vala',
 
   'Utility/Gtk/CustomMessageDialog.vala',
   'Utility/Gtk/TerminalWindow.vala',
@@ -56,6 +57,7 @@ sources_utility = files([
 sources_gtk = files([
   'Gtk/BackupBox.vala',
   'Gtk/BackupDeviceBox.vala',
+  'Gtk/BackupDatasetsBox.vala',
   'Gtk/BackupFinishBox.vala',
   'Gtk/BackupWindow.vala',
   'Gtk/BootOptionsBox.vala',
